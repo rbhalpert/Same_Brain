@@ -28,6 +28,7 @@ Make the game easier to understand on first play and faster to move through roun
 - Shorten or streamline post-answer transitions while preserving server-owned phase timing.
 - Improve reveal pacing with clearer group ordering, labels, and spacing.
 - Explain why answers matched or stayed separate in simple MVP-friendly language.
+- Add optional per-player accessibility quick toggles (high contrast, larger text scale, dyslexia-friendly font mode) that stay local to each device.
 
 ## Phase 3 - Fun & Retention
 **Goal**
@@ -39,6 +40,8 @@ Increase delight and replay value once the core experience is stable. Keep addit
 - Improve personal results feedback with clearer round summaries and match callouts.
 - Highlight standout "same brain" moments in reveal, leaderboard, or final results.
 - Add lightweight end-of-game session highlights worth talking about.
+- Add a one-time per-game prompt veto token so rooms can democratically skip one weak prompt before answering opens.
+- Add adaptive per-round answer timer tuning based on recent room lock-in speed, with conservative min/max bounds to preserve pacing clarity.
 
 ## Phase 4 - Frictionless Multiplayer
 **Goal**
