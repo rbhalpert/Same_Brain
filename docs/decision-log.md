@@ -199,3 +199,19 @@ The shareable URL needs to match the actual session the host launched, especiall
 - always using the server port in shared links
 - forcing hosts to hand-edit the port in copied links
 - treating the socket handshake origin as the only source of truth for the full invite URL
+
+---
+
+### Decision
+Expand the default prompt pool to a curated bank of 100 short, overlap-prone prompts.
+
+### Date
+2026-03-26
+
+### Reason
+Prompt quality directly drives "same brain" moments and replayability. A larger, curated bank reduces repeat frequency while keeping prompts instinctive, readable, and broadly relatable for MVP groups.
+
+### Rejected alternatives
+- keeping the tiny seed prompt list and deferring curation
+- adding open-ended or niche prompts that reduce answer overlap
+- introducing category/tag systems before prompt quality baseline was in place
