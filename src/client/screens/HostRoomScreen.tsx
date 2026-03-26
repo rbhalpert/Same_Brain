@@ -9,6 +9,7 @@ import { RevealGroupsBoard } from "../components/RevealGroupsBoard.js";
 import { RoundScoresBoard } from "../components/RoundScoresBoard.js";
 import { useCountdown } from "../hooks/useCountdown.js";
 import { useGameClient } from "../lib/gameClient.js";
+import { buildShareJoinUrl } from "../lib/shareUrl.js";
 
 function formatCountdown(secondsRemaining?: number) {
   if (secondsRemaining === undefined) {
@@ -18,20 +19,13 @@ function formatCountdown(secondsRemaining?: number) {
   return `${secondsRemaining}s`;
 }
 
-function buildJoinUrl(roomCode: string) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return `${window.location.origin}/join?room=${roomCode}`;
-}
-
 export function HostRoomScreen() {
   const { roomCode = "" } = useParams();
   const {
     session,
     roomView,
     latestError,
+    isRestoringHostSession,
     startRound,
     advancePhase,
     rematch,
@@ -50,9 +44,15 @@ export function HostRoomScreen() {
   const { secondsRemaining } = useCountdown(activeDeadline);
 
   const normalizedRoomCode = roomCode.toUpperCase();
+  const shareOrigin = roomView?.kind === "host" ? roomView.shareOrigin : undefined;
   const inviteUrl = useMemo(
-    () => buildJoinUrl(normalizedRoomCode),
-    [normalizedRoomCode]
+    () =>
+      buildShareJoinUrl({
+        roomCode: normalizedRoomCode,
+        currentOrigin: typeof window === "undefined" ? undefined : window.location.origin,
+        shareOrigin
+      }),
+    [normalizedRoomCode, shareOrigin]
   );
 
   if (
@@ -61,6 +61,21 @@ export function HostRoomScreen() {
     roomView?.kind !== "host" ||
     roomView.code !== normalizedRoomCode
   ) {
+    if (isRestoringHostSession) {
+      return (
+        <main className="screen screen--host">
+          <section className="stage stage--empty">
+            <p className="eyebrow">Shared screen</p>
+            <h1>Reconnecting the host session.</h1>
+            <p>
+              The room creator is reclaiming this room so the game can keep
+              moving without starting over.
+            </p>
+          </section>
+        </main>
+      );
+    }
+
     return (
       <main className="screen screen--host">
         <section className="stage stage--empty">
@@ -181,6 +196,7 @@ export function HostRoomScreen() {
               </p>
             </div>
             <div className="invite-stack">
+              <p className="invite-stack__label">Join from the same Wi-Fi</p>
               <button className="button button--secondary" onClick={() => void handleCopy()}>
                 {isCopying ? "Link copied" : "Copy invite link"}
               </button>

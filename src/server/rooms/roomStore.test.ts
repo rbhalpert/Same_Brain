@@ -9,6 +9,10 @@ function createDeterministicStore(
   return new RoomStore({
     now: () => 1_000,
     promptPool: ["Test prompt"],
+    hostTokenFactory: (() => {
+      let index = 0;
+      return () => `host-token-${(index += 1).toString()}`;
+    })(),
     idFactory: (() => {
       let index = 0;
       return () => `player-${(index += 1).toString()}`;
@@ -40,6 +44,8 @@ describe("RoomStore", () => {
       ok: true,
       room: {
         code: "HOST",
+        hostPlayerId: "player-1",
+        hostSessionToken: "host-token-1",
         players: [
           {
             name: "Alex",
@@ -59,6 +65,39 @@ describe("RoomStore", () => {
       ok: false,
       error: { code: "INVALID_NAME" }
     });
+  });
+
+  it("restores the host player on reconnect with a valid host token", () => {
+    const store = createDeterministicStore({
+      codeFactory: () => "REST"
+    });
+    const createResult = store.createRoomWithHost("Alex");
+    if (!createResult.ok) {
+      throw new Error("Expected host room creation to succeed.");
+    }
+
+    store.disconnectPlayer(createResult.room.code, createResult.player.id);
+    expect(store.getRoom(createResult.room.code)?.players).toMatchObject([
+      { id: createResult.player.id, connected: false }
+    ]);
+
+    expect(store.resumeHost(createResult.room.code, "wrong-token")).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_HOST_SESSION" }
+    });
+
+    expect(
+      store.resumeHost(createResult.room.code, createResult.room.hostSessionToken)
+    ).toMatchObject({
+      ok: true,
+      player: {
+        id: createResult.player.id,
+        connected: true
+      }
+    });
+    expect(store.getRoom(createResult.room.code)?.players).toMatchObject([
+      { id: createResult.player.id, connected: true }
+    ]);
   });
 
   it("retries room code generation until it finds an unused code", () => {

@@ -15,7 +15,7 @@ Status: complete
 - invite link works
 - QR works
 - players can join and appear in lobby
-Implemented now: creating a room also creates the host's own player slot, so the room creator can participate without a second join flow.
+Implemented now: creating a room also creates the host's own player slot, so the room creator can participate without a second join flow, and invite links or QR codes now automatically switch away from `localhost` so phones on the same LAN can join the room.
 
 ### Milestone 2
 Round flow
@@ -50,8 +50,8 @@ Status: in progress
 - rematch flow
 - disconnect does not crash room
 - basic inactive player handling
-Implemented now: the room can rematch from final results back into the same lobby, and the same host session that created the room now owns start, next-round, and play-again controls on the shared screen.
-Remaining: make disconnects stop breaking room progress and add basic inactive-player handling between rounds.
+Implemented now: the room can rematch from final results back into the same lobby, the same host session that created the room owns start, next-round, and play-again controls on the shared screen, and the host can now recover that room after a refresh or reconnect without recreating it.
+Remaining: make disconnected non-host players easier to manage and add basic inactive-player handling between rounds.
 
 ## Out of scope
 - alternate modes
@@ -63,6 +63,6 @@ Remaining: make disconnects stop breaking room progress and add basic inactive-p
 
 ## Current next task
 Continue Milestone 5 resilience work:
-- make disconnects stop breaking room progress during answering and post-round phases
 - add basic inactive-player handling for players who drop mid-session
+- let the host remove or ignore inactive players between rounds
 - preserve the current server-authoritative state model while making the room more forgiving

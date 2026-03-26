@@ -97,7 +97,10 @@ export function createHostView(room: RoomModel): HostView {
     kind: "host",
     code: room.code,
     phase: room.phase,
-    players: room.players.map((player) => ({ ...player })),
+    players: room.players.map((player) => ({
+      ...player,
+      connected: player.id === room.hostPlayerId ? true : player.connected
+    })),
     roundNumber: room.roundNumber,
     totalRounds: room.totalRounds,
     currentPrompt: room.currentPrompt,

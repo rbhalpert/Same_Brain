@@ -12,16 +12,22 @@ import type {
   CreateRoomResponse,
   JoinRoomPayload,
   JoinRoomResponse,
+  ResumeHostPayload,
+  ResumeHostResponse,
   RoomError,
   ServerToClientEvents,
   SubmitAnswerPayload
 } from "../shared/types.js";
+import { resolveShareOrigin } from "./network/shareOrigin.js";
 import { RoomStore } from "./rooms/roomStore.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
+const HOST = process.env.HOST ?? "0.0.0.0";
+const PUBLIC_ORIGIN_OVERRIDE = process.env.SAME_BRAIN_PUBLIC_ORIGIN;
 const roomStore = new RoomStore();
 const app = express();
 const httpServer = createServer(app);
+const activeHostSocketIds = new Map<string, string>();
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
     origin: true,
@@ -55,10 +61,20 @@ async function broadcastRoom(roomCode: string) {
 
   for (const socket of sockets) {
     const session = socket.data as SessionData;
-    if (session.role === "host") {
+    if (
+      session.role === "host" &&
+      activeHostSocketIds.get(roomCode) === socket.id
+    ) {
       const view = roomStore.getHostView(roomCode);
       if (view) {
-        socket.emit("room:state", view);
+        socket.emit("room:state", {
+          ...view,
+          shareOrigin: resolveShareOrigin({
+            originHeader: socket.handshake.headers.origin,
+            publicOriginOverride: PUBLIC_ORIGIN_OVERRIDE,
+            fallbackPort: PORT
+          })
+        });
       }
       continue;
     }
@@ -76,7 +92,11 @@ function emitError(
   socket: {
     emit: (event: "room:error", error: RoomError) => void;
   },
-  response: ActionResponse | CreateRoomResponse | JoinRoomResponse
+  response:
+    | ActionResponse
+    | CreateRoomResponse
+    | JoinRoomResponse
+    | ResumeHostResponse
 ) {
   if (!response.ok) {
     socket.emit("room:error", response.error);
@@ -121,13 +141,47 @@ io.on("connection", (socket) => {
     };
 
     socket.data = session;
+    activeHostSocketIds.set(room.code, socket.id);
     await socket.join(roomChannel(room.code));
     await broadcastRoom(room.code);
 
     const response: CreateRoomResponse = {
       ok: true,
       roomCode: room.code,
-      playerId: player.id
+      playerId: player.id,
+      hostToken: room.hostSessionToken
+    };
+    ack(response);
+  });
+
+  socket.on("room:resumeHost", async (payload: ResumeHostPayload, ack) => {
+    const resumeResult = roomStore.resumeHost(payload.roomCode, payload.hostToken);
+    if (!resumeResult.ok) {
+      const response: ResumeHostResponse = {
+        ok: false,
+        error: resumeResult.error
+      };
+      emitError(socket, response);
+      ack(response);
+      return;
+    }
+
+    const roomCode = payload.roomCode.trim().toUpperCase();
+    const session: SessionData = {
+      role: "host",
+      roomCode,
+      playerId: resumeResult.player.id
+    };
+
+    socket.data = session;
+    activeHostSocketIds.set(roomCode, socket.id);
+    await socket.join(roomChannel(roomCode));
+    await broadcastRoom(roomCode);
+
+    const response: ResumeHostResponse = {
+      ok: true,
+      roomCode,
+      playerId: resumeResult.player.id
     };
     ack(response);
   });
@@ -165,12 +219,16 @@ io.on("connection", (socket) => {
 
   socket.on("room:startRound", async (ack) => {
     const session = socket.data as SessionData;
-    if (session.role !== "host" || !session.roomCode) {
+    if (
+      session.role !== "host" ||
+      !session.roomCode ||
+      activeHostSocketIds.get(session.roomCode) !== socket.id
+    ) {
       const response: ActionResponse = {
         ok: false,
         error: {
           code: "CONTROL_NOT_ALLOWED",
-          message: "Only the host session can start a round."
+          message: "Only the active host session can start a round."
         }
       };
       emitError(socket, response);
@@ -191,12 +249,16 @@ io.on("connection", (socket) => {
 
   socket.on("room:advancePhase", async (ack) => {
     const session = socket.data as SessionData;
-    if (session.role !== "host" || !session.roomCode) {
+    if (
+      session.role !== "host" ||
+      !session.roomCode ||
+      activeHostSocketIds.get(session.roomCode) !== socket.id
+    ) {
       const response: ActionResponse = {
         ok: false,
         error: {
           code: "CONTROL_NOT_ALLOWED",
-          message: "Only the host session can continue the game."
+          message: "Only the active host session can continue the game."
         }
       };
       emitError(socket, response);
@@ -217,12 +279,16 @@ io.on("connection", (socket) => {
 
   socket.on("room:rematch", async (ack) => {
     const session = socket.data as SessionData;
-    if (session.role !== "host" || !session.roomCode) {
+    if (
+      session.role !== "host" ||
+      !session.roomCode ||
+      activeHostSocketIds.get(session.roomCode) !== socket.id
+    ) {
       const response: ActionResponse = {
         ok: false,
         error: {
           code: "CONTROL_NOT_ALLOWED",
-          message: "Only the host session can start a new game."
+          message: "Only the active host session can start a new game."
         }
       };
       emitError(socket, response);
@@ -278,6 +344,14 @@ io.on("connection", (socket) => {
   socket.on("disconnect", async () => {
     const session = socket.data as SessionData;
     if (
+      session.role === "host" &&
+      session.roomCode &&
+      activeHostSocketIds.get(session.roomCode) === socket.id
+    ) {
+      activeHostSocketIds.delete(session.roomCode);
+    }
+
+    if (
       (session.role === "player" || session.role === "host") &&
       session.roomCode &&
       session.playerId
@@ -295,6 +369,6 @@ setInterval(async () => {
   }
 }, 500);
 
-httpServer.listen(PORT, () => {
-  console.log(`Same Brain server listening on http://localhost:${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Same Brain server listening on port ${PORT}.`);
 });

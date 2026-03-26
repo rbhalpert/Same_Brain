@@ -151,3 +151,51 @@ The mental model needs to stay simple: if you click `Create room`, you are alrea
 - requiring the room creator to claim control through a second link, QR code, or tab
 - letting any player phone advance the room
 - requiring a separate non-playing controller device
+
+---
+
+### Decision
+Persist a private host resume token locally so the room creator can recover the host session after refresh or reconnect.
+
+### Date
+2026-03-25
+
+### Reason
+Milestone 5 needed the room creator to be able to keep the game moving even if the shared-screen browser refreshes or the socket reconnects. A server-issued host token tied to the original host player gives the browser a narrow, deterministic way to reclaim the room without rebuilding player state or creating a second host identity.
+
+### Rejected alternatives
+- forcing the host to recreate the room after refresh
+- trying to recover the host from the room code alone
+- making reconnect logic client-authoritative
+
+---
+
+### Decision
+Derive invite links and QR codes from a server-resolved share origin instead of the host browser's raw `window.location.origin`.
+
+### Date
+2026-03-25
+
+### Reason
+When the host opens Same Brain on `localhost`, copying that browser origin into the QR code makes the join link unusable on a phone. Resolving a LAN-friendly share origin on the server lets the host keep using `localhost` locally while still handing out a phone-reachable URL. The server also accepts a `SAME_BRAIN_PUBLIC_ORIGIN` override for machines with multiple adapters or unusual network setups.
+
+### Rejected alternatives
+- requiring the host to type or rewrite a LAN URL manually
+- keeping `localhost` in the shared QR code and expecting phones to recover
+- hardcoding a single port-specific LAN URL without respecting dev versus built client origins
+
+---
+
+### Decision
+Preserve the host browser's active protocol and port when building the QR code and invite link.
+
+### Date
+2026-03-25
+
+### Reason
+The shareable URL needs to match the actual session the host launched, especially during local development where the browser often runs on port `5173` while the game server is on another port. The QR code now keeps the current session's protocol and port, and only swaps `localhost` for the server-resolved LAN hostname when needed.
+
+### Rejected alternatives
+- always using the server port in shared links
+- forcing hosts to hand-edit the port in copied links
+- treating the socket handshake origin as the only source of truth for the full invite URL

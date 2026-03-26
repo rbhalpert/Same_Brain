@@ -9,6 +9,7 @@ export type RoomPhase =
 
 export type RoomErrorCode =
   | "INVALID_ROOM"
+  | "INVALID_HOST_SESSION"
   | "INVALID_NAME"
   | "INVALID_ANSWER"
   | "DUPLICATE_NAME"
@@ -84,6 +85,8 @@ export interface RoomModel {
   code: string;
   phase: RoomPhase;
   players: PlayerRecord[];
+  hostPlayerId: string;
+  hostSessionToken: string;
   roundNumber: number;
   totalRounds: number;
   currentPrompt?: string;
@@ -100,6 +103,7 @@ export interface RoomModel {
 export interface HostView {
   kind: "host";
   code: string;
+  shareOrigin?: string;
   phase: RoomPhase;
   players: PlayerRecord[];
   roundNumber: number;
@@ -164,12 +168,26 @@ export type CreateRoomResponse =
       ok: true;
       roomCode: string;
       playerId: string;
+      hostToken: string;
     }
   | ErrorResponse;
 
 export interface CreateRoomPayload {
   name: string;
 }
+
+export interface ResumeHostPayload {
+  roomCode: string;
+  hostToken: string;
+}
+
+export type ResumeHostResponse =
+  | {
+      ok: true;
+      roomCode: string;
+      playerId: string;
+    }
+  | ErrorResponse;
 
 export type JoinRoomResponse =
   | {
@@ -197,6 +215,10 @@ export interface ClientToServerEvents {
   "room:create": (
     payload: CreateRoomPayload,
     ack: (response: CreateRoomResponse) => void
+  ) => void;
+  "room:resumeHost": (
+    payload: ResumeHostPayload,
+    ack: (response: ResumeHostResponse) => void
   ) => void;
   "room:join": (
     payload: JoinRoomPayload,

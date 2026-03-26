@@ -23,6 +23,7 @@ export interface RoomStoreOptions {
   random?: () => number;
   promptPool?: readonly string[];
   codeFactory?: () => string;
+  hostTokenFactory?: () => string;
   idFactory?: () => string;
 }
 
@@ -67,6 +68,14 @@ function createIdFactory() {
   return () => `player-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function createHostTokenFactory() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return () => crypto.randomUUID();
+  }
+
+  return () => `host-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function sanitizeName(name: string): string | undefined {
   const trimmed = name.trim();
   if (trimmed.length < 1 || trimmed.length > 20) {
@@ -87,6 +96,8 @@ export class RoomStore {
 
   private readonly codeFactory: () => string;
 
+  private readonly hostTokenFactory: () => string;
+
   private readonly idFactory: () => string;
 
   constructor(options: RoomStoreOptions = {}) {
@@ -95,6 +106,8 @@ export class RoomStore {
     this.random = options.random ?? (() => Math.random());
     this.codeFactory =
       options.codeFactory ?? (() => randomRoomCode(this.random));
+    this.hostTokenFactory =
+      options.hostTokenFactory ?? createHostTokenFactory();
     this.idFactory = options.idFactory ?? createIdFactory();
   }
 
@@ -104,6 +117,8 @@ export class RoomStore {
       code,
       phase: "lobby",
       players: [],
+      hostPlayerId: "",
+      hostSessionToken: this.hostTokenFactory(),
       roundNumber: 0,
       totalRounds: CLASSIC_TOTAL_ROUNDS,
       answersByPlayerId: {},
@@ -145,6 +160,58 @@ export class RoomStore {
     };
 
     room.players.push(player);
+    room.hostPlayerId = player.id;
+
+    return {
+      ok: true,
+      room,
+      player
+    };
+  }
+
+  resumeHost(
+    roomCode: string,
+    hostToken: string
+  ):
+    | {
+        ok: true;
+        room: RoomModel;
+        player: PlayerRecord;
+      }
+    | {
+        ok: false;
+        error: RoomError;
+      } {
+    const room = this.getRoom(roomCode);
+    if (!room) {
+      return {
+        ok: false,
+        error: createError("INVALID_ROOM", "That room code does not exist.")
+      };
+    }
+
+    if (!hostToken || room.hostSessionToken !== hostToken) {
+      return {
+        ok: false,
+        error: createError(
+          "INVALID_HOST_SESSION",
+          "This host session can no longer be restored."
+        )
+      };
+    }
+
+    const player = room.players.find((entry) => entry.id === room.hostPlayerId);
+    if (!player) {
+      return {
+        ok: false,
+        error: createError(
+          "INVALID_HOST_SESSION",
+          "This host player is no longer available."
+        )
+      };
+    }
+
+    player.connected = true;
 
     return {
       ok: true,
